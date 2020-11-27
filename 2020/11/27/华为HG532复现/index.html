@@ -79,17 +79,19 @@
 
 
 
-<meta name="description" content="Welcome to Hexo! This is your very first post. Check documentation for more info. If you get any problems when using Hexo, you can find the answer in troubleshooting or you can ask me on GitHub. Quick">
+<meta name="description" content="Huawei HG532 命令注入漏洞Huawei HG532 漏洞点比较简单：  没有对用户的输入进行过滤直接拼接折后执行了system,主要学习一下使用qemu-system-mode来搭建环境。 漏洞分析目标：  了解upnp协议的应用场景 （TODO） 使用qemu尝试搭建可以与host通信的mips虚拟机  （√） 尝试解决user mode无法启动upnp服务的问题   （√） 跟踪一">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Hello World">
-<meta property="og:url" content="http://example.com/2020/11/27/hello-world/index.html">
+<meta property="og:title" content="Hexo">
+<meta property="og:url" content="http://example.com/2020/11/27/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0/index.html">
 <meta property="og:site_name" content="Hexo">
-<meta property="og:description" content="Welcome to Hexo! This is your very first post. Check documentation for more info. If you get any problems when using Hexo, you can find the answer in troubleshooting or you can ask me on GitHub. Quick">
+<meta property="og:description" content="Huawei HG532 命令注入漏洞Huawei HG532 漏洞点比较简单：  没有对用户的输入进行过滤直接拼接折后执行了system,主要学习一下使用qemu-system-mode来搭建环境。 漏洞分析目标：  了解upnp协议的应用场景 （TODO） 使用qemu尝试搭建可以与host通信的mips虚拟机  （√） 尝试解决user mode无法启动upnp服务的问题   （√） 跟踪一">
 <meta property="og:locale">
-<meta property="article:published_time" content="2020-11-27T12:49:53.081Z">
-<meta property="article:modified_time" content="2020-11-27T03:56:12.226Z">
+<meta property="og:image" content="http://example.com/2020/11/27/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0.assets/image-20201107003733114.png">
+<meta property="article:published_time" content="2020-11-27T13:53:57.226Z">
+<meta property="article:modified_time" content="2020-11-27T13:56:01.874Z">
 <meta property="article:author" content="John Doe">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2020/11/27/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0.assets/image-20201107003733114.png">
 
 
 
@@ -119,13 +121,13 @@
 
 
 
-  <link rel="canonical" href="http://example.com/2020/11/27/hello-world/"/>
+  <link rel="canonical" href="http://example.com/2020/11/27/华为HG532复现/"/>
 
 
 
 
 
-  <title>Hello World | Hexo</title>
+  <title> | Hexo</title>
   
 
 
@@ -232,7 +234,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/hello-world/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="">
@@ -249,7 +251,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">Hello World</h1>
+          <h1 class="post-title" itemprop="name headline"></h1>
         
 
         <div class="post-meta">
@@ -261,7 +263,7 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T20:49:53+08:00">
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T21:53:57+08:00">
                 2020-11-27
               </time>
             
@@ -299,19 +301,30 @@
       
 
       
-        <p>Welcome to <a target="_blank" rel="noopener" href="https://hexo.io/">Hexo</a>! This is your very first post. Check <a target="_blank" rel="noopener" href="https://hexo.io/docs/">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a target="_blank" rel="noopener" href="https://hexo.io/docs/troubleshooting.html">troubleshooting</a> or you can ask me on <a target="_blank" rel="noopener" href="https://github.com/hexojs/hexo/issues">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">&quot;My New Post&quot;</span></span><br></pre></td></tr></table></figure>
+        <h1 id="Huawei-HG532-命令注入漏洞"><a href="#Huawei-HG532-命令注入漏洞" class="headerlink" title="Huawei HG532 命令注入漏洞"></a>Huawei HG532 命令注入漏洞</h1><p><a target="_blank" rel="noopener" href="https://blog.knownsec.com/2017/12/huawei-hg532-%E7%B3%BB%E5%88%97%E8%B7%AF%E7%94%B1%E5%99%A8%E8%BF%9C%E7%A8%8B%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/">Huawei HG532</a></p>
+<p>漏洞点比较简单：</p>
+<p><img src="%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0.assets/image-20201107003733114.png" alt="image-20201107003733114"></p>
+<p>没有对用户的输入进行过滤直接拼接折后执行了<code>system</code>,主要学习一下使用<code>qemu-system-mode</code>来搭建环境。</p>
+<p>漏洞分析目标：</p>
+<ol>
+<li>了解upnp协议的应用场景 （TODO）</li>
+<li>使用qemu尝试搭建可以与host通信的mips虚拟机  （√）</li>
+<li>尝试解决<code>user mode</code>无法启动upnp服务的问题   （√）</li>
+<li>跟踪一下漏洞利用的路径。（TODO）</li>
+</ol>
+<h2 id="搭建环境"><a href="#搭建环境" class="headerlink" title="搭建环境"></a>搭建环境</h2><p>首先是添加一张用于桥接的网卡，详细可以参见这个<a target="_blank" rel="noopener" href="https://blog.csdn.net/sunqian666888/article/details/85093576">Blog</a></p>
+<p>什么是桥接呢？</p>
+<p>桥接就是依据链路层的地址（MAC地址）, 对网络数据包进行转发的过程，一般的交换机，网桥就有桥接的作用。</p>
+<p>为什么要需要桥接呢？</p>
+<p>我理解的是因为我们用qemu创建的虚拟机和host主机（实际上也是虚拟机）其实相当于两台独立的主机，需要一个网桥将他们连接起来。</p>
+<p>添加网卡后的状态如下，其中docker0应该是docker的网桥，bridge0就是我们创建的网卡，此时(eth0/ens33)已经没有分配ip地址了。</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> ifconfig</span></span><br><span class="line">bridge0   Link encap:Ethernet  HWaddr 00:0c:29:e6:65:f9  </span><br><span class="line">          inet addr:192.168.50.129  Bcast:192.168.50.255  Mask:255.255.255.0</span><br><span class="line">          inet6 addr: fe80::5a4d:78a0:d0f5:629d/64 Scope:Link</span><br><span class="line">          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1</span><br><span class="line">          RX packets:63 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:79 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:1000 </span><br><span class="line">          RX bytes:8341 (8.3 KB)  TX bytes:27250 (27.2 KB)</span><br><span class="line"></span><br><span class="line">docker0   Link encap:Ethernet  HWaddr 02:42:38:df:c5:00  </span><br><span class="line">          inet addr:172.17.0.1  Bcast:172.17.255.255  Mask:255.255.0.0</span><br><span class="line">          UP BROADCAST MULTICAST  MTU:1500  Metric:1</span><br><span class="line">          RX packets:0 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:0 </span><br><span class="line">          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)</span><br><span class="line"></span><br><span class="line">eth0      Link encap:Ethernet  HWaddr 00:0c:29:e6:65:f9  </span><br><span class="line">          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1</span><br><span class="line">          RX packets:489 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:491 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:1000 </span><br><span class="line">          RX bytes:73470 (73.4 KB)  TX bytes:61830 (61.8 KB)</span><br><span class="line"></span><br><span class="line">lo        Link encap:Local Loopback  </span><br><span class="line">          inet addr:127.0.0.1  Mask:255.0.0.0</span><br><span class="line">          inet6 addr: ::1/128 Scope:Host</span><br><span class="line">          UP LOOPBACK RUNNING  MTU:65536  Metric:1</span><br><span class="line">          RX packets:582 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:582 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:1000 </span><br><span class="line">          RX bytes:39733 (39.7 KB)  TX bytes:39733 (39.7 KB)</span><br></pre></td></tr></table></figure>
 
-<p>More info: <a target="_blank" rel="noopener" href="https://hexo.io/docs/writing.html">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
 
-<p>More info: <a target="_blank" rel="noopener" href="https://hexo.io/docs/server.html">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
 
-<p>More info: <a target="_blank" rel="noopener" href="https://hexo.io/docs/generating.html">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a target="_blank" rel="noopener" href="https://hexo.io/docs/one-command-deployment.html">Deployment</a></p>
+<p>需要配置<code>/etc/qemu-ifup</code>，和之后进到虚拟机内的一些ip配置，可以参考这个<a target="_blank" rel="noopener" href="http://blog.chinaunix.net/uid-20564848-id-73940.html">blog</a></p>
+<p>一切就绪之后，qemu的debian应该已经可以ping通host了。可以使用ssh将文件传进来。然后chroot进行下一步的工作。</p>
+<p>接下来的漏洞复现可以参考网上的文章进行复现了，漏洞不难，主要是尝试一下使用<code>qemu system-mode</code>起系统,搭建环境。</p>
 
       
     </div>
@@ -336,13 +349,17 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
+              <a href="/2020/11/27/extern%E7%9A%84%E5%B0%8F%E9%97%AE%E9%A2%98/" rel="next" title="">
+                <i class="fa fa-chevron-left"></i> 
+              </a>
+            
           </div>
 
           <span class="post-nav-divider"></span>
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2020/11/27/avast_%E6%95%B4%E6%95%B0%E6%BA%A2%E5%87%BA/" rel="prev" title="">
+              <a href="/2020/11/27/%E9%9D%9EX86%E5%B9%B3%E5%8F%B0ROP/" rel="prev" title="">
                  <i class="fa fa-chevron-right"></i>
               </a>
             
@@ -458,7 +475,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Quick-Start"><span class="nav-number">1.</span> <span class="nav-text">Quick Start</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Create-a-new-post"><span class="nav-number">1.1.</span> <span class="nav-text">Create a new post</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Run-server"><span class="nav-number">1.2.</span> <span class="nav-text">Run server</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Generate-static-files"><span class="nav-number">1.3.</span> <span class="nav-text">Generate static files</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Deploy-to-remote-sites"><span class="nav-number">1.4.</span> <span class="nav-text">Deploy to remote sites</span></a></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Huawei-HG532-%E5%91%BD%E4%BB%A4%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E"><span class="nav-number">1.</span> <span class="nav-text">Huawei HG532 命令注入漏洞</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%90%AD%E5%BB%BA%E7%8E%AF%E5%A2%83"><span class="nav-number">1.1.</span> <span class="nav-text">搭建环境</span></a></li></ol></li></ol></div>
             
 
           </div>

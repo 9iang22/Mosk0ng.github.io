@@ -229,6 +229,1241 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/%E4%BF%AE%E5%A4%8Dplt%E8%A1%A8%E8%84%9A%E6%9C%AC/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/%E4%BF%AE%E5%A4%8Dplt%E8%A1%A8%E8%84%9A%E6%9C%AC/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T22:00:36+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="PLT-FIX"><a href="#PLT-FIX" class="headerlink" title="PLT_FIX"></a>PLT_FIX</h1><p>在使用新版的GCC编译X64 ELF，用IDA PRO 7.0逆向的时候，会出现PLT表无法识别的问题。</p>
+<p>主要原因在于，新版的GCC比旧版多了一个<code>.plt.sec</code>段，延迟绑定下，libc中函数调用的流程如下：</p>
+<ul>
+<li>call 函数对应的<code>.plt.sec</code>段中的entry</li>
+<li><code>.plt.sec</code>什么都不做，跳转到<code>got</code>表项中的地址</li>
+<li>如果是第一次调用，那么<code>got</code>表中记录的是函数对应的<code>plt</code>表项，否则记录的是函数的地址</li>
+<li>跳转到<code>plt</code>表后，<code>push</code>函数的<code>idx</code>和一些resolve需要的数据，然后进行绑定。</li>
+</ul>
+<p>可以看到，与之前的流程有些许不同，<code>.plt.sec</code>的出现，造成了IDA 7.0无法识别PLT表，而我又买不起7.5，所以只能尝试使用idapython写个脚本来重命名一下这些plt表中的函数。</p>
+<p>主要思路如下：</p>
+<ul>
+<li>找到<code>.plt.sec</code>表，对其中的每一项做下面的处理</li>
+<li>从<code>plt.sec</code>跟到<code>plt表</code>,根据<code>plt</code>表中<code>push</code>的idx，查找对应的函数名</li>
+<li>重命名PLT_SEC中的entry</li>
+</ul>
+<p>遇到这么一个问题：</p>
+<p>没有找到idapython中直接识别<code>.strtab</code>段的api，所以采用了自己解析的办法。</p>
+<ul>
+<li>首先找到<code>program header</code>，查找其中的<code>program entry</code>，找出<code>dynamic</code>段</li>
+<li>解析<code>dynamic</code>段，找到<code>jmprel, strtab, symtab</code></li>
+<li>从<code>jmprel</code>查到<code>symtab</code>查到<code>strtab</code></li>
+</ul>
+<p>其实就是走了一遍手动resolve到函数名的流程。</p>
+<p>源码如下：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> idaapi</span><br><span class="line"><span class="keyword">import</span> idautils</span><br><span class="line"></span><br><span class="line">jmprel_addr = <span class="number">0</span></span><br><span class="line">strtab_addr = <span class="number">0</span></span><br><span class="line">symtab_addr = <span class="number">0</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">get_index</span>(<span class="params">plt_sec_entry_addr</span>):</span></span><br><span class="line">    addr = plt_sec_entry_addr</span><br><span class="line">    <span class="keyword">assert</span> GetMnem(addr) == <span class="string">&quot;endbr64&quot;</span></span><br><span class="line">    addr += <span class="number">4</span></span><br><span class="line">    <span class="keyword">assert</span> GetMnem(addr) == <span class="string">&quot;jmp&quot;</span></span><br><span class="line">    plt_addr = idc.Dword(<span class="built_in">int</span>(GetOpnd(addr,<span class="number">0</span>)[<span class="number">7</span>:],<span class="number">16</span>))</span><br><span class="line">    <span class="comment">#print &quot;plt_addr = &quot; + hex(plt_addr)</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">assert</span> GetMnem(plt_addr) == <span class="string">&quot;endbr64&quot;</span></span><br><span class="line">    push_addr = plt_addr + <span class="number">4</span></span><br><span class="line">    <span class="keyword">assert</span> GetMnem(push_addr) == <span class="string">&#x27;push&#x27;</span></span><br><span class="line">    index = GetOpnd(push_addr,<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">if</span> <span class="string">&quot;h&quot;</span> <span class="keyword">in</span> index:</span><br><span class="line">        index = index[:-<span class="number">1</span>]</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">int</span>(index,<span class="number">16</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getName</span>(<span class="params">idx, jmptab_addr, symtab_addr, strtab_addr</span>):</span></span><br><span class="line">    symidx = idc.Qword(jmptab_addr+idx*<span class="number">0x18</span> + <span class="number">0x8</span>) &gt;&gt; <span class="number">32</span></span><br><span class="line">    symtab_entry = symtab_addr + symidx * <span class="number">0x18</span></span><br><span class="line">    str_off = idc.Dword(symtab_entry)</span><br><span class="line">    name_str = idc.GetString(str_off +strtab_addr)</span><br><span class="line">    <span class="keyword">return</span> name_str</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">rename_plt_sec</span>(<span class="params">plt_sec_entry_addr,name_str</span>):</span></span><br><span class="line">    <span class="comment"># rename function</span></span><br><span class="line">    MakeName(plt_sec_entry_addr,name_str)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">get_tables</span>():</span></span><br><span class="line">    <span class="keyword">global</span> jmprel_addr</span><br><span class="line">    <span class="keyword">global</span> symtab_addr</span><br><span class="line">    <span class="keyword">global</span> strtab_addr</span><br><span class="line">    addr = MinEA()</span><br><span class="line">    addr += <span class="number">0x40</span> <span class="comment"># program header   </span></span><br><span class="line">    <span class="keyword">while</span> <span class="number">1</span>:</span><br><span class="line">        PHT_type = idc.Dword(addr)</span><br><span class="line">        <span class="keyword">if</span>(PHT_type == <span class="number">2</span>):</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">        addr += <span class="number">0x38</span></span><br><span class="line">    <span class="comment"># print &quot;addr = &quot; + hex(addr)</span></span><br><span class="line">    va = addr + <span class="number">0x10</span></span><br><span class="line">    dynamic_addr = idc.Qword(va) + MinEA()</span><br><span class="line">    <span class="comment"># print &quot;dynamic_addr = &quot; + hex(dynamic_addr)</span></span><br><span class="line">    idx = <span class="number">0</span></span><br><span class="line">    <span class="keyword">while</span> <span class="number">1</span>:</span><br><span class="line">        t = idc.Qword(dynamic_addr+idx*<span class="number">0x10</span>)</span><br><span class="line">        <span class="keyword">if</span>(<span class="keyword">not</span> t):</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            <span class="keyword">if</span> t == <span class="number">0x17</span>:</span><br><span class="line">                jmprel_addr = idc.Qword(dynamic_addr + idx * <span class="number">0x10</span> +<span class="number">0x8</span>)</span><br><span class="line">            <span class="keyword">elif</span> t == <span class="number">0x6</span> :</span><br><span class="line">                symtab_addr = idc.Qword(dynamic_addr + idx * <span class="number">0x10</span> + <span class="number">0x8</span>)</span><br><span class="line">            <span class="keyword">elif</span> t == <span class="number">0x5</span>:</span><br><span class="line">                strtab_addr = idc.Qword(dynamic_addr + idx * <span class="number">0x10</span> + <span class="number">0x8</span>)</span><br><span class="line">        idx += <span class="number">1</span></span><br><span class="line">    <span class="comment">#assert jmprel_addr and symtab_addr and strtab_addr</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">get_plt_sec_addr</span>():</span></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> idautils.Segments():</span><br><span class="line">        <span class="keyword">if</span> idc.SegName(i) == <span class="string">&quot;.plt.sec&quot;</span>:</span><br><span class="line">            <span class="keyword">return</span> [idc.SegStart(i),idc.SegEnd(i)]</span><br><span class="line">    <span class="keyword">return</span> []</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">main</span>():</span></span><br><span class="line">    get_tables()</span><br><span class="line">    <span class="built_in">print</span> <span class="string">&quot;jmprel_addr = %lx&quot;</span>%(jmprel_addr)</span><br><span class="line">    <span class="built_in">print</span> <span class="string">&quot;strtab_addr = %lx&quot;</span>%(strtab_addr)</span><br><span class="line">    <span class="built_in">print</span> <span class="string">&quot;symtab_addr = %lx&quot;</span>%(symtab_addr)</span><br><span class="line"></span><br><span class="line">    <span class="built_in">print</span> getName(<span class="number">0</span>,jmprel_addr,symtab_addr,strtab_addr)</span><br><span class="line">    <span class="built_in">print</span> getName(<span class="number">1</span>,jmprel_addr,symtab_addr,strtab_addr)</span><br><span class="line">    <span class="built_in">print</span> getName(<span class="number">2</span>,jmprel_addr,symtab_addr,strtab_addr)</span><br><span class="line"></span><br><span class="line">    res = get_plt_sec_addr()</span><br><span class="line"></span><br><span class="line">    plt_sec_entry_addr = res[<span class="number">0</span>]</span><br><span class="line">    <span class="keyword">while</span>(plt_sec_entry_addr &lt; res[<span class="number">1</span>]):</span><br><span class="line">        name_str = getName(get_index(plt_sec_entry_addr),jmprel_addr,symtab_addr,strtab_addr)</span><br><span class="line">        rename_plt_sec(plt_sec_entry_addr,name_str+<span class="string">&quot;_plt_sec&quot;</span>)</span><br><span class="line">        plt_sec_entry_addr += <span class="number">0x10</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">main()</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/vivetok%E6%91%84%E5%83%8F%E5%A4%B4%E6%A0%88%E6%BA%A2%E5%87%BA%E6%BC%8F%E6%B4%9E%E5%A4%8D%E7%8E%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/vivetok%E6%91%84%E5%83%8F%E5%A4%B4%E6%A0%88%E6%BA%A2%E5%87%BA%E6%BC%8F%E6%B4%9E%E5%A4%8D%E7%8E%B0/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T21:59:27+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="vivetok-摄像头栈溢出漏洞复现"><a href="#vivetok-摄像头栈溢出漏洞复现" class="headerlink" title="vivetok 摄像头栈溢出漏洞复现"></a>vivetok 摄像头栈溢出漏洞复现</h1><h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><p>漏洞poc: <a target="_blank" rel="noopener" href="https://www.exploit-db.com/exploits/44001">https://www.exploit-db.com/exploits/44001</a></p>
+<p>大部分网上的wp都是参考这篇文章：<a target="_blank" rel="noopener" href="https://xz.aliyun.com/t/5054">https://xz.aliyun.com/t/5054</a></p>
+<p>漏洞固件和环境(我自己使用的环境)： <a target="_blank" rel="noopener" href="https://pan.baidu.com/s/1l43s8MrRk1AiaDyuD4i5KQ">https://pan.baidu.com/s/1l43s8MrRk1AiaDyuD4i5KQ</a>  提取码：ke88</p>
+<h2 id="Environment"><a href="#Environment" class="headerlink" title="Environment"></a>Environment</h2><p>大部分问题都可以在<a target="_blank" rel="noopener" href="https://xz.aliyun.com/t/5054">文章</a>中得到解决。不过根据文章中的环境配置，有几个比较麻烦的点：</p>
+<ol>
+<li><p>需要使用qemu搭建arm的环境，然后在qemu中使用gdbserver，在host中使用gdb-multiarch进行双机调试。此处gdbserver需要编译成armv5架构。github中有一个编译好的静态的gdb+gdbserver的项目，但是改项目中没有armv5架构。自行编译又出了一些奇奇怪怪的问题。</p>
+<p>解决方法：使用了一块raspberry 3b+ 进行环境搭建。</p>
+</li>
+<li><p>解决找不倒共享库的问题， 在chroot并运行httpd服务时，出现了找不倒共享库的问题。实际上这些共享库都在./lib/ 和 ./usr/lib/ 文件夹下，只是不知道为什么链接没有了.</p>
+<p>解决方法：自己创建链接或者直接重命名共享库即可。</p>
+</li>
+<li><p>解决chroot到固件根目录后报错找不倒/bin/bash的问题。</p>
+<p>解决方法：cp /bin/bash ./bin ，然后把bash需要的共享库也放到固件的lib中。</p>
+</li>
+<li><p>其他问题参见上文给出的链接。</p>
+</li>
+</ol>
+<h2 id="漏洞点"><a href="#漏洞点" class="headerlink" title="漏洞点"></a>漏洞点</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 0x0018538</span></span><br><span class="line">v35 = <span class="built_in">strstr</span>(haystack, <span class="string">&quot;Content-Length&quot;</span>);</span><br><span class="line">v36 = <span class="built_in">strchr</span>(v35, <span class="number">10</span>);</span><br><span class="line">v37 = <span class="built_in">strchr</span>(v35, <span class="number">58</span>);</span><br><span class="line"><span class="built_in">strncpy</span>(dest, v37 + <span class="number">1</span>, v36 - (v37 + <span class="number">1</span>));<span class="comment">// *</span></span><br></pre></td></tr></table></figure>
+
+<p>漏洞很简单，strncpy的size参数使用不当，而dest处于bp-0x38的位置，很容易造成栈溢出。根据crash信息，可以控制r4-r11, pc的值，完成利用。</p>
+<h2 id="EXP"><a href="#EXP" class="headerlink" title="EXP"></a>EXP</h2><p>有两个需要注意的点：</p>
+<ol>
+<li>iot设备为了提高性能一般是不开启aslr的</li>
+<li>exp中不能出现<code>\x00</code>， 否则会被<code>strncpy</code>截断</li>
+</ol>
+<p>上文的文章中给出了一个exp，修改之后发现在我自己的环境下，会crash在system函数中。还不清楚是什么原因，不过经过测试，可以执行rop链，虽然exp没有改出来，但是漏洞复现的工作基本完成，如果有师傅搞懂了这个地方，还请告知：<a href="mailto:&#x6d;&#111;&#x73;&#107;&#x6f;&#110;&#x67;&#x40;&#113;&#x71;&#46;&#99;&#111;&#x6d;">&#x6d;&#111;&#x73;&#107;&#x6f;&#110;&#x67;&#x40;&#113;&#x71;&#46;&#99;&#111;&#x6d;</a></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><ol>
+<li>主要的难点还是搭环境(x， 不过要坚信，固件在设备上能跑起来，那一定有能跑起来的道理</li>
+<li>真机调试比qemu省时省力。</li>
+</ol>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/%E9%9D%9EX86%E5%B9%B3%E5%8F%B0ROP/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/%E9%9D%9EX86%E5%B9%B3%E5%8F%B0ROP/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T21:56:24+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="2020-11-15"><a href="#2020-11-15" class="headerlink" title="2020_11_15"></a>2020_11_15</h1><h2 id="arm-rop"><a href="#arm-rop" class="headerlink" title="arm rop"></a>arm rop</h2><p>关于寄存器的对应关系：</p>
+<p><img src="https://pic4.zhimg.com/80/v2-c2d0e32ad2f71a13ebf31ea3096e8ffb_720w.jpg" alt="img"></p>
+<p>一些常见的gadget：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">0x0001044c : pop &#123;fp, pc&#125;</span><br><span class="line">0x000102c4 : pop &#123;r3, pc&#125;</span><br><span class="line">0x000103f4 : pop &#123;r4, pc&#125;</span><br><span class="line">0x000104a8 : pop &#123;r4, r5, r6, r7, r8, sb, sl, pc&#125;</span><br><span class="line">0x000104a8 : pop &#123;r4, r5, r6, r7, r8, sb, sl, pc&#125; ; andeq r0, r1, r8, lsr #21 ; andeq r0, r1, r0, lsr #21 ; bx lr</span><br></pre></td></tr></table></figure>
+
+
+
+<p>构造ropchain，有这样的问题：</p>
+<ul>
+<li>函数调用使用<code>bl func</code> 指令，该指令会将返回地址存入<code>lr</code>寄存器，如果我们想要构造一个rop链去进行连续的函数调用，那么我们就要同时控制<code>pc</code>和<code>lr</code>。</li>
+<li>或者是这样，使用一条带有<code>bl(x) r3, ... pop pc</code>这样的gadget</li>
+</ul>
+<p>恰好在init中，我们就可以找到这样的gadget:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">p_r3_pc = <span class="number">0x000102c4</span> <span class="comment"># r3</span></span><br><span class="line">gadget = <span class="number">0x000104a0</span> <span class="comment">#  mov r2, sb ; mov r1, r8 ; mov r0, r7 ; blx r3 ; cmp r4, r6 ; bne #0x104a4 ; pop &#123;r4, r5, r6, r7, r8, sb, sl, pc&#125;</span></span><br><span class="line">gadget2 = <span class="number">0x000104b8</span> <span class="comment"># pop &#123;r4, r5, r6, r7, r8, sb, sl, pc&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>一般函数调用不会使用<code>r4, r7</code>，使用第一条和第三条gadget我们可以控制<code>r3-r10</code>,然后利用gadget1调用函数并返回。</p>
+<h2 id="aarch64-rop"><a href="#aarch64-rop" class="headerlink" title="aarch64 rop"></a>aarch64 rop</h2><p>从上面的寻找，可以发现很大概率init中这个通用的gadget在arm64中也能使用。</p>
+<p><img src="https://img-blog.csdn.net/20170509190238235?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvdGFubGkyMDA5MDUwNg==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast" alt="这里写图片描述"></p>
+<p>aarch64 寄存器上没有什么太大的变化，主要是32位到64位扩展，另外多了16个寄存器。</p>
+<p>不过aarch64中PC寄存器神隐了，似乎无法直接<code>pop pc</code>,<code>ret</code>指令其实就是<code>b lr</code>。</p>
+<p>另外，没有了pop和push(起码我编译出来是这样的),使用<code>stp</code>和<code>ldp</code>对栈进行读写。</p>
+<p>init处的gadget：</p>
+<p><img src="%E9%9D%9EX86%E5%B9%B3%E5%8F%B0ROP.assets/image-20201115205112458.png" alt="image-20201115205112458"></p>
+<p>可以看到，loc_40064c的位置我们可以控制到<code>x19-x24</code>， 上面的部分可以控制函数执行的前三个参数，这已经足够了，这个地方同样可以作为通用的<code>gadget</code>使用，如果程序没有<code>init</code>，那么只能个靠本领，找对应的寄存器来控制。一般来说，大一点的程序<code>gadget</code>都不会很缺。需要注意的是，需要手工调栈。</p>
+<h2 id="mips"><a href="#mips" class="headerlink" title="mips"></a>mips</h2><p>mips寄存器：</p>
+<table>
+<thead>
+<tr>
+<th>REGISTER</th>
+<th>NAME</th>
+<th>USAGE</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>$0</td>
+<td>$zero</td>
+<td>常量0(constant value 0)</td>
+</tr>
+<tr>
+<td>$1</td>
+<td>$at</td>
+<td>保留给汇编器(Reserved for assembler)</td>
+</tr>
+<tr>
+<td>$2-$3</td>
+<td>$v0-$v1</td>
+<td>函数调用返回值(values for results and expression evaluation)</td>
+</tr>
+<tr>
+<td>$4-$7</td>
+<td>$a0-$a3</td>
+<td>函数调用参数(arguments)</td>
+</tr>
+<tr>
+<td>$8-$15</td>
+<td>$t0-$t7</td>
+<td>暂时的(或随便用的)</td>
+</tr>
+<tr>
+<td>$16-$23</td>
+<td>$s0-$s7</td>
+<td>保存的(或如果用，需要SAVE/RESTORE的)(saved)</td>
+</tr>
+<tr>
+<td>$24-$25</td>
+<td>$t8-$t9</td>
+<td>暂时的(或随便用的)</td>
+</tr>
+<tr>
+<td>$28</td>
+<td>$gp</td>
+<td>全局指针(Global Pointer)</td>
+</tr>
+<tr>
+<td>$29</td>
+<td>$sp</td>
+<td>堆栈指针(Stack Pointer)</td>
+</tr>
+<tr>
+<td>$30</td>
+<td>$fp</td>
+<td>帧指针(Frame Pointer)</td>
+</tr>
+<tr>
+<td>$31</td>
+<td>$ra</td>
+<td>返回地址(return address)</td>
+</tr>
+</tbody></table>
+<p>比较值得注意的就是$31 返回地址，还有$a0-$a3调用参数。</p>
+<p>另外需要说的是，要注意mips流水线设计。</p>
+<p><img src="%E9%9D%9EX86%E5%B9%B3%E5%8F%B0ROP.assets/image-20201115205940170.png" alt="image-20201115205940170"></p>
+<p>这个地方的返回地址同样被放在了栈上，我们比较好操控。</p>
+<p>奇怪的是，为什么<code>jalr</code>等指令已经设置好了<code>ra</code>寄存器，在被调用函数中，还要将其存在栈上，使用的时候拿出来呢？（因为嵌套调用.jpg）</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T21:53:57+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="Huawei-HG532-命令注入漏洞"><a href="#Huawei-HG532-命令注入漏洞" class="headerlink" title="Huawei HG532 命令注入漏洞"></a>Huawei HG532 命令注入漏洞</h1><p><a target="_blank" rel="noopener" href="https://blog.knownsec.com/2017/12/huawei-hg532-%E7%B3%BB%E5%88%97%E8%B7%AF%E7%94%B1%E5%99%A8%E8%BF%9C%E7%A8%8B%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/">Huawei HG532</a></p>
+<p>漏洞点比较简单：</p>
+<p><img src="%E5%8D%8E%E4%B8%BAHG532%E5%A4%8D%E7%8E%B0.assets/image-20201107003733114.png" alt="image-20201107003733114"></p>
+<p>没有对用户的输入进行过滤直接拼接折后执行了<code>system</code>,主要学习一下使用<code>qemu-system-mode</code>来搭建环境。</p>
+<p>漏洞分析目标：</p>
+<ol>
+<li>了解upnp协议的应用场景 （TODO）</li>
+<li>使用qemu尝试搭建可以与host通信的mips虚拟机  （√）</li>
+<li>尝试解决<code>user mode</code>无法启动upnp服务的问题   （√）</li>
+<li>跟踪一下漏洞利用的路径。（TODO）</li>
+</ol>
+<h2 id="搭建环境"><a href="#搭建环境" class="headerlink" title="搭建环境"></a>搭建环境</h2><p>首先是添加一张用于桥接的网卡，详细可以参见这个<a target="_blank" rel="noopener" href="https://blog.csdn.net/sunqian666888/article/details/85093576">Blog</a></p>
+<p>什么是桥接呢？</p>
+<p>桥接就是依据链路层的地址（MAC地址）, 对网络数据包进行转发的过程，一般的交换机，网桥就有桥接的作用。</p>
+<p>为什么要需要桥接呢？</p>
+<p>我理解的是因为我们用qemu创建的虚拟机和host主机（实际上也是虚拟机）其实相当于两台独立的主机，需要一个网桥将他们连接起来。</p>
+<p>添加网卡后的状态如下，其中docker0应该是docker的网桥，bridge0就是我们创建的网卡，此时(eth0/ens33)已经没有分配ip地址了。</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> ifconfig</span></span><br><span class="line">bridge0   Link encap:Ethernet  HWaddr 00:0c:29:e6:65:f9  </span><br><span class="line">          inet addr:192.168.50.129  Bcast:192.168.50.255  Mask:255.255.255.0</span><br><span class="line">          inet6 addr: fe80::5a4d:78a0:d0f5:629d/64 Scope:Link</span><br><span class="line">          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1</span><br><span class="line">          RX packets:63 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:79 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:1000 </span><br><span class="line">          RX bytes:8341 (8.3 KB)  TX bytes:27250 (27.2 KB)</span><br><span class="line"></span><br><span class="line">docker0   Link encap:Ethernet  HWaddr 02:42:38:df:c5:00  </span><br><span class="line">          inet addr:172.17.0.1  Bcast:172.17.255.255  Mask:255.255.0.0</span><br><span class="line">          UP BROADCAST MULTICAST  MTU:1500  Metric:1</span><br><span class="line">          RX packets:0 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:0 </span><br><span class="line">          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)</span><br><span class="line"></span><br><span class="line">eth0      Link encap:Ethernet  HWaddr 00:0c:29:e6:65:f9  </span><br><span class="line">          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1</span><br><span class="line">          RX packets:489 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:491 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:1000 </span><br><span class="line">          RX bytes:73470 (73.4 KB)  TX bytes:61830 (61.8 KB)</span><br><span class="line"></span><br><span class="line">lo        Link encap:Local Loopback  </span><br><span class="line">          inet addr:127.0.0.1  Mask:255.0.0.0</span><br><span class="line">          inet6 addr: ::1/128 Scope:Host</span><br><span class="line">          UP LOOPBACK RUNNING  MTU:65536  Metric:1</span><br><span class="line">          RX packets:582 errors:0 dropped:0 overruns:0 frame:0</span><br><span class="line">          TX packets:582 errors:0 dropped:0 overruns:0 carrier:0</span><br><span class="line">          collisions:0 txqueuelen:1000 </span><br><span class="line">          RX bytes:39733 (39.7 KB)  TX bytes:39733 (39.7 KB)</span><br></pre></td></tr></table></figure>
+
+
+
+<p>需要配置<code>/etc/qemu-ifup</code>，和之后进到虚拟机内的一些ip配置，可以参考这个<a target="_blank" rel="noopener" href="http://blog.chinaunix.net/uid-20564848-id-73940.html">blog</a></p>
+<p>一切就绪之后，qemu的debian应该已经可以ping通host了。可以使用ssh将文件传进来。然后chroot进行下一步的工作。</p>
+<p>接下来的漏洞复现可以参考网上的文章进行复现了，漏洞不难，主要是尝试一下使用<code>qemu system-mode</code>起系统,搭建环境。</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/extern%E7%9A%84%E5%B0%8F%E9%97%AE%E9%A2%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/extern%E7%9A%84%E5%B0%8F%E9%97%AE%E9%A2%98/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T21:48:22+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="extern"><a href="#extern" class="headerlink" title="extern"></a>extern</h1><p>extern的作用主要有两个：</p>
+<ul>
+<li><code>extern &quot;C&quot; void fun(int a, int b)</code><br>告知编译器在编译<code>fun</code>函数名的时候按照C的规则来翻译而不是C++</li>
+<li><code>extern int g_int</code><br>声明函数或者全局变量的作用范围，被声明的函数和全局变量可以在本模块或者其他模块中使用。</li>
+</ul>
+<p>今天发现群里问了这样一个问题：</p>
+<blockquote>
+<p>在一个源文件里定义了一个数组：char a[6];<br /><br>　　在另外一个文件里用下列语句进行了声明：extern char <em>a；<br /><br>　　请问，这样可以吗？ <br /><br>　　答案与分析：<br /><br>　　1)、不可以，程序运行时会告诉你非法访问。原因在于，指向类型T的指针并不等价于类型T的数组。extern char <em>a声明的是一个指针变量而不是字符数组，因此与实际的定义不同，从而造成运行时非法访问。应该将声明改为extern char a[ ]。<br /><br>　　2)、例子分析如下，如果a[] = “abcd”,则外部变量a=0x61626364 (abcd的ASCII码值)，</em>a显然没有意义<br>　　显然a指向的空间（0x61626364）没有意义，易出现非法内存访问。<br /><br>　　3)、这提示我们，在使用extern时候要严格对应声明时的格式，在实际编程中，这样的错误屡见不鲜。<br /><br>　　4)、extern用在变量声明中常常有这样一个作用，你在</em>.c文件中声明了一个全局的变量，这个全局的变量如果要被引用，就放在*.h中并用extern来声明。</p>
+</blockquote>
+<p>这个问题主要是提问者混淆了<code>char *</code> 和<code>char []</code>，在C语言中，两者的用法，表现很相似，比如下面这个代码：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;assert.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">char</span> buf[] = <span class="string">&quot;abcd&quot;</span>;</span><br><span class="line">    <span class="built_in">puts</span>(buf);</span><br><span class="line">    <span class="keyword">char</span> *s = buf;</span><br><span class="line">    <span class="built_in">puts</span>(s);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;buf = %p\n&quot;</span>, buf);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;s = %p\n&quot;</span>, s);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>两者的输出完全一致。但是当观察汇编代码的时候，就能发现<code>buf</code>只是一个地址，并不占内存，而<code>s</code>作为一个指针，是实实在在的占用了8byte的内存的。</p>
+<p>至于为什么会发生非法内存访问，其实是编译器对<code>extern</code>声明的类型没有进行check，举个例子：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; test1.c</span><br><span class="line">int num &#x3D; 1;</span><br><span class="line">int num2 &#x3D; 1;</span><br><span class="line"></span><br><span class="line">&#x2F;&#x2F; test2.c</span><br><span class="line">int main()</span><br><span class="line">&#123;</span><br><span class="line">    extern long num;</span><br><span class="line">    return num;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最后返回的会是<code>0x100000001</code>。像类型混淆.jpg</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/golang_datarace/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/golang_datarace/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T21:01:20+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h2 id="golang-data-race"><a href="#golang-data-race" class="headerlink" title="golang data race"></a>golang data race</h2><p>link：<a target="_blank" rel="noopener" href="http://wiki.m4p1e.com/article/getById/90">http://wiki.m4p1e.com/article/getById/90</a></p>
+<p>问题出在<code>golang</code>的<code>go runtine</code>上，<code>interface</code>用于实现<code>golang</code>的多态。举个栗子：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    f = &amp;ferari&#123;oilLevel: <span class="number">100</span>&#125;</span><br><span class="line">    r = &amp;ricksha&#123;oilLevel: math.MaxUint32&#125;</span><br><span class="line">    confused = f</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">var</span> i <span class="keyword">int</span></span><br><span class="line">        <span class="keyword">for</span> &#123;</span><br><span class="line">            confused = f</span><br><span class="line">            confused = r</span><br><span class="line">            i++</span><br><span class="line">            <span class="keyword">if</span> i &gt; <span class="number">1000000</span> &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        confused.OilLevel()</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<p>这里面，<code>ferari</code>和<code>ricksha</code>是两个实现了同一个<code>interface</code>的类，该接口中有一个函数，用来打印类型名和<code>oilLevel</code>。</p>
+<p>由于对<code>confused</code>赋值的操作不是原子操作，所以可能会出现竞争。导致数据与方法不符的情况。这会导致这样一个严重的后果，调用了一个类的方法，用的却是另一个类的数据。</p>
+<p>在<code>golang</code>中，正常情况下来讲，无法进行任意地址的读写(如果没有unsafe)，但是考虑下面这种情况：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> itf <span class="keyword">interface</span> &#123;</span><br><span class="line">    X() <span class="keyword">bool</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> safe <span class="keyword">struct</span> &#123;</span><br><span class="line">    f *<span class="keyword">int</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *safe)</span> <span class="title">X</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> unsafe <span class="keyword">struct</span> &#123;</span><br><span class="line">    f <span class="function"><span class="keyword">func</span><span class="params">()</span> <span class="title">bool</span></span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(u *unsafe)</span> <span class="title">X</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> u.f != <span class="literal">nil</span> &#123;</span><br><span class="line">        u.f()</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> good itf</span><br><span class="line"><span class="keyword">var</span> bad itf</span><br><span class="line"><span class="keyword">var</span> confused itf</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    pp := <span class="number">0x1337</span></span><br><span class="line">    good = &amp;safe&#123;f: &amp;pp&#125;</span><br><span class="line">    bad = &amp;unsafe&#123;&#125;</span><br><span class="line">    confused = good</span><br><span class="line"></span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">var</span> i <span class="keyword">int</span></span><br><span class="line">        <span class="keyword">for</span> &#123;</span><br><span class="line">            confused = bad</span><br><span class="line">            confused = good</span><br><span class="line">            i++</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> i &gt; <span class="number">100000</span> &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        confused.X()</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这样一个程序，会导致crash</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> ./test3</span>          </span><br><span class="line">unexpected fault address 0x1337</span><br><span class="line">fatal error: fault</span><br><span class="line">[signal SIGSEGV: segmentation violation code=0x1 addr=0x1337 pc=0x1337]</span><br></pre></td></tr></table></figure>
+
+
+
+<p>为什么会这样呢，因为两个协程在交替执行的时候，出现了调用<code>unsafe</code>类的<code>X()</code>函数，但是由于条件竞争，成员<code>f</code>被从<code>NULL</code>修改为了<code>0x1337</code>，导致了段错误。</p>
+<p>那现在我们需要一个任意地址读，那么可以对程序进行如下修改</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> itf <span class="keyword">interface</span> &#123;</span><br><span class="line">    X() <span class="keyword">bool</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> safe <span class="keyword">struct</span> &#123;</span><br><span class="line">    f <span class="keyword">uint64</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *safe)</span> <span class="title">X</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> unsafe <span class="keyword">struct</span> &#123;</span><br><span class="line">   	f *<span class="keyword">uint64</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(u *unsafe)</span> <span class="title">X</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> u.f != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="built_in">println</span>(*u.f)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> good itf</span><br><span class="line"><span class="keyword">var</span> bad itf</span><br><span class="line"><span class="keyword">var</span> confused itf</span><br><span class="line"><span class="keyword">var</span> num <span class="keyword">uint64</span> = <span class="number">0xdeadbeef</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="built_in">println</span>(&amp;num)</span><br><span class="line">    <span class="keyword">var</span> pp <span class="keyword">uint64</span> = <span class="number">0x4c8048</span></span><br><span class="line">    good = &amp;safe&#123;f: pp&#125;</span><br><span class="line">    bad = &amp;unsafe&#123;&#125;</span><br><span class="line">    confused = good</span><br><span class="line"></span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">var</span> i <span class="keyword">int</span></span><br><span class="line">        <span class="keyword">for</span> &#123;</span><br><span class="line">            confused = bad</span><br><span class="line">            confused = good</span><br><span class="line">            i++</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> i &gt; <span class="number">100000</span> &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        confused.X()</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>代码中的地址均为硬编码的地址…一时间不知道怎么获取函数地址</p>
+<p>任意写的漏洞也比较简单，我们只修改<code>unsafe</code>的<code>X()</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">func (u *unsafe) X() bool &#123;</span><br><span class="line">    if u.f !&#x3D; nil &#123;</span><br><span class="line">        *u.f &#x3D; 0x12345678</span><br><span class="line">    &#125;</span><br><span class="line">    return false</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>漏洞出现的原因主要就是因为条件竞争造成的类型混淆，在任意读写的poc中，我们利用条件竞争，将一个<code>int</code>类型的值，变成了<code>int *</code>，在任意代码执行中，我们将一个数据变成了一个函数地址。</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/NOE711_%E5%9B%BA%E4%BB%B6%E5%88%86%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/NOE711_%E5%9B%BA%E4%BB%B6%E5%88%86%E6%9E%90/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T20:59:43+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h2 id="NOE-711"><a href="#NOE-711" class="headerlink" title="NOE 711"></a>NOE 711</h2><p>link：<a target="_blank" rel="noopener" href="https://paper.seebug.org/613/">https://paper.seebug.org/613/</a></p>
+<p>POWER PC， 操作系统为Vxworks。</p>
+<p>首先是逆向的工作,有以下这几个值得关注的点：</p>
+<ul>
+<li><p>Vxworks的默认加载基址是<code>0x10000</code>， 可以通过查看符号表中的字符串地址RVA和字符串在bin文件中的VA的offset计算得到</p>
+</li>
+<li><p>符号表大小为0x10, 如下,每个都占4字节</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">|   RVA of symbol namestring |    RVA of symbols  |     index maybe   |   null |</span><br></pre></td></tr></table></figure>
+
+<p>可以用<a target="_blank" rel="noopener" href="https://www.hex-rays.com/products/ida/support/idapython_docs/">idapython</a>来还原符号：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> idaapi <span class="keyword">import</span> *</span><br><span class="line"><span class="keyword">from</span> idc <span class="keyword">import</span> *</span><br><span class="line"></span><br><span class="line">loadaddress = <span class="number">0x10000</span></span><br><span class="line">eaStart = <span class="number">0x31eec4</span> + loadaddress</span><br><span class="line">eaEnd = <span class="number">0x348114</span> + loadaddress</span><br><span class="line"></span><br><span class="line">ea = eaStart</span><br><span class="line">eaEnd = eaEnd</span><br><span class="line"><span class="keyword">while</span> ea &lt; eaEnd:</span><br><span class="line">    create_strlit(Dword(ea), BADADDR)  <span class="comment"># </span></span><br><span class="line">    sName = get_strlit_contents(Dword(ea))</span><br><span class="line">    <span class="built_in">print</span> sName</span><br><span class="line">    <span class="keyword">if</span> sName:</span><br><span class="line">        eaFunc = Dword(ea + <span class="number">4</span>)</span><br><span class="line">        MakeName(eaFunc, sName)</span><br><span class="line">        MakeCode(eaFunc)</span><br><span class="line">        MakeFunction(eaFunc, BADADDR)</span><br><span class="line">    ea = ea + <span class="number">16</span></span><br></pre></td></tr></table></figure>
+
+<p>使用到的API：</p>
+<ul>
+<li>create_strlit: 创建一个string</li>
+<li>get_strlit_contents: 获取string</li>
+<li>MakeName: 重命名</li>
+<li>MakeCode:</li>
+<li>MakeFunction : 创建函数</li>
+</ul>
+</li>
+<li><p>PPC的指令集</p>
+<ul>
+<li>通用寄存器有r0-r31, r0作为fp指针，f1作为sp指针，f2作为rtoc指针，系统调用时保存调用号，<br><img src="https://images.seebug.org/content/images/2018/12/e0da9f6e-8f70-431f-8850-c412d05eba35.jpg" alt="img1"><br>r3作为第一个参数和返回值。r4-r10用来传参。</li>
+<li>专用寄存器有<ul>
+<li>lr 存放返回地址</li>
+<li>ctr 计数器</li>
+<li>msr，cr，xer等</li>
+</ul>
+</li>
+<li>主要寻址方式有两种，寄存器寻址和偏移地址寻址。其中偏移地址表示为base(offset)的形式.<br>stxxx/lxxxx 为内存读写指令</li>
+<li>转移指令主要用bxxx</li>
+<li>系统调用使用sc指令</li>
+<li>move指令mr</li>
+<li>cmp指令<br>奇怪的是有一个cr1一直出现，应该是状态字。</li>
+</ul>
+<p>对于程序开头的流程的介绍，这篇文章比较详细，对于汇编的理解也有帮助：<a target="_blank" rel="noopener" href="https://paper.seebug.org/771/%EF%BC%8C">https://paper.seebug.org/771/，</a> 也介绍了很多识别基址的方法。</p>
+</li>
+</ul>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/avast_%E6%95%B4%E6%95%B0%E6%BA%A2%E5%87%BA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/11/27/avast_%E6%95%B4%E6%95%B0%E6%BA%A2%E5%87%BA/" itemprop="url">未命名</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-11-27T20:58:08+08:00">
+                2020-11-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="avast-Out-of-bounds-copy-in-Array-prototype-toString"><a href="#avast-Out-of-bounds-copy-in-Array-prototype-toString" class="headerlink" title="avast: Out-of-bounds copy in Array.prototype.toString"></a>avast: Out-of-bounds copy in Array.prototype.toString</h1><h2 id="SUMMARY"><a href="#SUMMARY" class="headerlink" title="SUMMARY"></a>SUMMARY</h2><p>一个由于整数溢出造成的溢出漏洞。</p>
+<h2 id="PRODUCT"><a href="#PRODUCT" class="headerlink" title="PRODUCT"></a>PRODUCT</h2><p><code>AvastSvc.exe</code>进程拥有<code>SYSTEM</code>权限。此进程加载了一个低安全级别的反病毒引擎，用来处理一些不安全的数据。问题在于，这个引擎虽然被设计为处理不被信任的数据，但是缺少沙箱和缓解机制的保护，任何的漏洞都有可能造成较高的威胁，而且比较容易被远程攻击。</p>
+<h2 id="DETIAL"><a href="#DETIAL" class="headerlink" title="DETIAL"></a>DETIAL</h2><p>该应用有一个用于处理js数据的模拟器，此进程使用了<code>algo.dll</code>,在其中的<code>Array.prototype.toString</code>中存在一个缓冲区溢出漏洞，这个地方的代码可以用伪代码表述为：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// stringList contains some strings</span></span><br><span class="line"></span><br><span class="line">size_type total_len = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span>(<span class="keyword">auto</span> s: stringList)&#123;</span><br><span class="line">    total_len += strings(s);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">void</span>* temp = alloc(total_len);</span><br><span class="line"></span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line"><span class="comment">//然后把toString的结果字符串copy到这个地方去。</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">strcpy</span>(temp, result);</span><br></pre></td></tr></table></figure>
+
+<p>漏洞点在于，如果list中存放了比较长字符串的话，对total_len的累加有可能使之溢出，变为一个较小的值，在后面分配一块较小的内存，然后将toString的结果copy到这块内存，造成了溢出。</p>
+<p>例如：</p>
+<p>size_type的范围指定为0-255，采用8bit表示。考虑一个字符串长度位’129’,list中有两个这样的字符串。<br><code>total_len = 0 + 129 + 129 = 129* 2 - 256 = 2</code>,接下来将Alloc(2),然后将长度至少为<code>129*2</code>的结果拷贝到temp指向的内存，造成溢出。</p>
+<h2 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h2><p>poc地址<br /><br><a target="_blank" rel="noopener" href="https://github.com/taviso/avscript">https://github.com/taviso/avscript</a><br>poc:</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> test = <span class="string">&quot;0123456789&quot;</span>;</span><br><span class="line"><span class="comment">//产生一个长字符串，长度为10*（2**16）</span></span><br><span class="line"><span class="keyword">for</span>(<span class="keyword">var</span> i = <span class="number">0</span>; i &lt; <span class="number">16</span>; i++)&#123;</span><br><span class="line">    test = test + test;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> a = [];</span><br><span class="line"></span><br><span class="line"><span class="comment">//在list中放入6554个长度为10*（2**16）的字符串</span></span><br><span class="line"><span class="keyword">for</span>(<span class="keyword">var</span> i = <span class="number">0</span>; i &lt; <span class="number">6554</span>; i++)&#123;</span><br><span class="line">    a[i] = test;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//触发漏洞</span></span><br><span class="line">a.toString()</span><br></pre></td></tr></table></figure>
+
+<h2 id="复现"><a href="#复现" class="headerlink" title="复现"></a>复现</h2><p>可以通过作者项目搭建环境<br /><br><a target="_blank" rel="noopener" href="https://github.com/taviso/avscript">https://github.com/taviso/avscript</a></p>
+<h2 id="利用思路（x）猜测（√）"><a href="#利用思路（x）猜测（√）" class="headerlink" title="利用思路（x）猜测（√）"></a>利用思路（x）猜测（√）</h2><ul>
+<li>该进程运行在SYSTEM权限，成功的攻击将会造成巨大的损害。</li>
+<li>根据描述，该进程可以处理网络流量，可能会造成远程的攻击和利用</li>
+<li>从作者的poc来看，可以用来破坏或者覆写内存中的指针和其他数据结构，劫持程序执行流。</li>
+</ul>
+<h2 id="漏洞的产生原因"><a href="#漏洞的产生原因" class="headerlink" title="漏洞的产生原因"></a>漏洞的产生原因</h2><p>程序员并没有考虑到<code>toString</code>的结果会这么长。正常来讲，list中的基本元素，像Integer，Boolean这些数据类型要达到这么长的toString，只能是list中的数据量特别大。但是String类型由于本身长度就比较长，比较容易溢出。</p>
+<p>除去StringList可能触发这一漏洞外，任何自定义的class的List，通过重写toString，也可以触发这一漏洞。</p>
+<p>这个漏洞可以有一些等价的形式，例如：<br /><br>对整形数据做乘法运算时，不进行溢出检测;<br /></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//记录电话号码</span></span><br><span class="line"><span class="keyword">int</span> n = getNum();</span><br><span class="line"><span class="keyword">char</span>* phoneList = <span class="built_in">malloc</span>(n*<span class="number">12</span>);</span><br><span class="line"><span class="keyword">for</span>(<span class="keyword">int</span> i = <span class="number">0</span>; i&lt; n; i++)&#123;</span><br><span class="line">    read(<span class="number">0</span>,phoneList,<span class="number">11</span>);</span><br><span class="line">    phoneList[<span class="number">11</span>] = <span class="number">0</span>;</span><br><span class="line">    phoneList += <span class="number">12</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="修复"><a href="#修复" class="headerlink" title="修复"></a>修复</h2><p>在toString中采用溢出检测。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">newLen = oldLen + addLen;</span><br><span class="line"><span class="keyword">if</span>(oldLen &gt; newLen)</span><br><span class="line">    perror(<span class="string">&quot;xxxx&quot;</span>)</span><br><span class="line">oldLen = newLen;</span><br><span class="line"><span class="comment">//do sth</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="漏洞评级"><a href="#漏洞评级" class="headerlink" title="漏洞评级"></a>漏洞评级</h2><p>我认为，漏洞比较危险。可能造成rce（x</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="http://example.com/2020/11/27/hello-world/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -394,7 +1629,7 @@
               
                 <a href="/archives/%20%7C%7C%20archive">
               
-                  <span class="site-state-item-count">1</span>
+                  <span class="site-state-item-count">9</span>
                   <span class="site-state-item-name">日志</span>
                 </a>
               </div>
